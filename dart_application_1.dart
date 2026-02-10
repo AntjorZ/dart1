@@ -13,7 +13,6 @@ void main() {
   String operation = stdin.readLineSync()!;
 
   switch (operation) {
-    // На оценку "3"
     case '+':
       print('Результат: ${a + b}');
       break;
@@ -36,7 +35,6 @@ void main() {
       print('Результат: ${pow(a, b)}');
       break;
 
-    // На оценку "4"
     case '==':
       print('Результат: ${a == b}');
       break;
