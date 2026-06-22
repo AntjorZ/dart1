@@ -1,2 +1,103 @@
-A sample command-line application with an entrypoint in `bin/`, library code
-in `lib/`, and example unit test in `test/`.
+# Game Library — консольное приложение на Dart
+
+## 1. Описание предметной области
+
+Приложение для управления личной коллекцией игр. Каждая игра — сущность `Game` со следующими полями:
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| id | int | уникальный идентификатор, автоинкремент |
+| title | String | название игры |
+| developer | String | разработчик |
+| genre | Genre (enum) | жанр: jrpg, action, rpg, horror |
+| platform | Platform (enum) | платформа: pc, playstation, xbox, nintendo |
+| hoursPlayed | double | количество наигранных часов |
+| completed | bool | пройдена ли игра |
+| rating | int? | оценка от 1 до 10, **nullable** — может быть не указана |
+
+## 2. Побайтовая спецификация формата data.bin
+
+Все целые числа — big-endian. Структура файла:
+
+`[4 байта: int32 count] [запись_1] [запись_2] ... [запись_N]`
+
+Структура одной записи (Game):
+
+| Смещение | Поле | Тип | Размер (байт) |
+|----------|------|-----|----------------|
+| 0 | id | int32 | 4 |
+| 4 | title (длина) | int32 | 4 |
+| 8 | title (данные) | UTF-8 | N |
+| ... | developer (длина) | int32 | 4 |
+| ... | developer (данные) | UTF-8 | N |
+| ... | genre | byte (enum index) | 1 |
+| ... | platform | byte (enum index) | 1 |
+| ... | hoursPlayed | float64 | 8 |
+| ... | completed | byte (0/1) | 1 |
+| ... | rating (флаг) | byte (0=null, 1=есть) | 1 |
+| ... | rating (значение) | int32 | 4 (только если флаг=1) |
+
+Размер записи переменный — зависит от длины строк title/developer и наличия rating.
+
+## 3. Структура проекта
+
+```
+game_library/
+├── bin/
+│   └── main.dart              — точка входа
+├── lib/
+│   ├── models/
+│   │   ├── identifiable.dart  — абстрактный класс-контракт
+│   │   ├── enums.dart         — Genre, Platform
+│   │   └── game.dart          — сущность Game
+│   ├── repository.dart        — Repository<T>, generic-хранилище
+│   ├── service.dart           — GameService, бизнес-логика
+│   ├── services/
+│   │   └── logger_service.dart — логирование через изолят
+│   ├── storage/
+│   │   ├── byte_reader.dart   — чтение бинарных данных
+│   │   └── binary_storage.dart — сохранение/загрузка data.bin
+│   └── ui/
+│       └── menu.dart          — консольное меню
+├── data.bin                   — бинарный файл с коллекцией (создаётся при запуске)
+├── logs.txt                   — текстовый лог действий (создаётся при запуске)
+├── pubspec.yaml
+└── README.md
+```
+
+## 4. Сборка и запуск
+
+Требуется Dart SDK ≥ 3.0.0.
+
+Запуск:
+```
+dart run bin/main.dart
+```
+
+Компиляция в исполняемый файл:
+```
+dart compile exe bin/main.dart -o app
+./app
+```
+
+При первом запуске `data.bin` отсутствует — приложение перехватывает `StorageException`, создаёт пустой файл и заполняет коллекцию 5 тестовыми играми автоматически.
+
+## 5. Архитектура
+
+- **Menu** — консольный интерфейс, цикл ввода команд, обработка исключений
+- **GameService** — бизнес-логика: автоинкремент id, поиск, сортировка, валидация, статистика
+- **Repository<T>** — обобщённое (generic) хранилище в памяти, `Map<int, T>`, CRUD-операции
+- **BinaryStorage** — асинхронная сериализация коллекции в бинарный файл вручную (без сторонних пакетов)
+- **LoggerService** — асинхронное логирование действий пользователя через отдельный изолят, запись в `logs.txt`
+
+## 6. Обработка исключений
+
+| Класс исключения | Где возникает | Реакция |
+|---|---|---|
+| ValidationException | Создание/редактирование объекта с некорректными данными | Сообщение пользователю |
+| NotFoundException | Поиск/удаление/обновление по несуществующему ID | Сообщение, возврат в меню |
+| StorageException | Загрузка data.bin при первом запуске | Создание нового пустого файла |
+
+## 7. Тестовые данные
+
+При первом запуске коллекция автоматически заполняется 5 тестовыми играми (Persona 5 Royal, Yakuza 0, Dark Souls III, Resident Evil 2, Ace Attorney Trilogy), демонстрирующими все жанры, платформы и nullable-поле rating.
